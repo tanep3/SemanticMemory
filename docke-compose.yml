@@ -1,0 +1,15 @@
+services:
+  semanticmemory:
+    build: .
+    container_name: semanticmemory_app
+    ports:
+      - "6001:8000"
+    volumes:
+      - ./datas:/app/datas
+      - ./logs:/app/logs
+    environment:
+      - SQLITE_PATH=/app/semantic_memory.db
+      - CHROMA_PATH=/app/datas/chroma
+      - OLLAMA_URL=http://localhost:11434
+
+    restart: unless-stopped
