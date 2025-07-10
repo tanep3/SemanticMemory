@@ -1,5 +1,10 @@
 # == たねちゃん式: 安心・高速・全部入り .gitignore ==
 
+# datasディレクトリ以下の全てを無視
+datas/*
+# ただしディレクトリ自体は残すためにこの例外をつける
+!datas/.gitkeep
+
 # Python
 __pycache__/
 *.py[cod]
