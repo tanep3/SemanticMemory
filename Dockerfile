@@ -10,6 +10,9 @@ COPY requirements.txt ./
 # 必要パッケージインストール
 RUN pip install --no-cache-dir -r requirements.txt
 
+# データディレクトリを作成
+RUN mkdir -p ./datas/chroma
+
 # アプリのコードをコピー
 COPY . .
 
@@ -17,8 +20,5 @@ COPY . .
 ENV PYTHONUNBUFFERED=1 \
     CHROMA_PATH=/app/datas/chroma
 
-# ポート開放（FastAPI標準）
-EXPOSE 8000
-
 # サービス起動
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${APP_PORT:-8000}"]

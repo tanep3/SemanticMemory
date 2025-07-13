@@ -6,6 +6,7 @@ from . import settings
 from .api_router import router as api_router
 from dotenv import load_dotenv
 import contextlib
+import os
 
 load_dotenv()
 
@@ -36,3 +37,9 @@ app.add_middleware(
 
 # APIルーター
 app.include_router(api_router, prefix="/api")
+
+if __name__ == "__main__":
+    import uvicorn
+
+    port = int(os.getenv("APP_PORT", "8000"))
+    uvicorn.run("src.main:app", host="0.0.0.0", port=port)

@@ -1,10 +1,10 @@
 import requests
 
-def summarize_text(text, model="mistral:latest", url="http://localhost:11434"):
+def summarize_text(text, system_prompt="以下のテキストを日本語で簡潔に要約してください。", model="mistral:latest", url="http://localhost:11434"):
     """
     Ollama APIで要約する
     """
-    prompt = f"以下のテキストを日本語で簡潔に要約してください:\n\n{text}"
+    prompt = f"system: {system_prompt}\n\n{text}"
     payload = {
         "model": model,
         "prompt": prompt,

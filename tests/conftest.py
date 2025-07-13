@@ -2,6 +2,7 @@ import pytest
 import sqlite3
 import os
 import src.db as db
+import src.chroma as chroma
 
 DB_PATH = os.getenv("SQLITE_PATH", "./datas/semantic_memory.db")
 
@@ -9,6 +10,7 @@ DB_PATH = os.getenv("SQLITE_PATH", "./datas/semantic_memory.db")
 def setup_database():
     db.initialize_db()
     db.initialize_settings()
+    chroma.clear_collection()
 
 @pytest.fixture(autouse=True)
 def clear_db():

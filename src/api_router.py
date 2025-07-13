@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
@@ -29,11 +29,12 @@ class SearchDBResponse(BaseModel):
     sub_text: Optional[str]
     summary_text: Optional[str]
     create_time: str
+    update_time: Optional[str]
 
 class SearchVectorRequest(BaseModel):
     query: str
-    threshold: Optional[float] = 0.5
-    limit: Optional[int] = 5
+    threshold: Optional[float] = None
+    limit: Optional[int] = None
 
 class UpdateDBRequest(BaseModel):
     id: int
@@ -53,13 +54,14 @@ class SummarizeRequest(BaseModel):
 class SaveRequest(BaseModel):
     main_text: str
     sub_text: Optional[str] = None
+    original_text: Optional[str] = None
     summarize: Optional[bool] = True
 
 class RetrieveRequest(BaseModel):
     query: Optional[str]
-    threshold: Optional[float] = 0.8
-    limit: Optional[int] = 5
-    recent_limit: Optional[int] = 5
+    threshold: Optional[float] = None
+    limit: Optional[int] = None
+    recent_limit: Optional[int] = None
 
 class SettingsUpdateRequest(BaseModel):
     key: str
@@ -116,10 +118,14 @@ def search_vector(req: SearchVectorRequest):
     sbert_model = settings.get_setting("sbert_model")
     model = get_embedding_model(sbert_model)
     emb = embed_texts([req.query], model)[0]
+    if req.threshold:
+        threshold = float(req.threshold)
+    else:
+        threshold = float(settings.get_setting("cosine_threshold"))
 
     results = chroma.search_vectors(
         query_embedding=emb,
-        threshold=req.threshold,
+        threshold=threshold,
         limit=req.limit
     )
 
@@ -129,10 +135,14 @@ def search_vector(req: SearchVectorRequest):
 # /api/get_recent_db
 # -----------------------------
 @router.get("/get_recent_db", response_model=List[SearchDBResponse])
-def get_recent_db(limit: Optional[int] = None):
+def get_recent_db(
+    order: str = Query("create", enum=["create", "update"]),
+    limit: Optional[int] = None
+):
     if limit == 0:
         raise HTTPException(status_code=400, detail="limit must be >0 or omitted")
-    return db.get_recent_talk_logs(limit=limit)
+    
+    return db.get_recent_talk_logs(order=order, limit=limit)
 
 # -----------------------------
 # /api/get_by_id_db
@@ -187,6 +197,7 @@ def update_db(req: UpdateDBRequest):
 # -----------------------------
 @router.post("/update_vector")
 def update_vector(req: UpdateVectorRequest):
+    exists = chroma.vector_exists(req.id)
     # 存在確認
     if not chroma.vector_exists(req.id):
         raise HTTPException(status_code=404, detail="Vector not found")
@@ -230,7 +241,8 @@ def rebuild_vector(sbert_model: Optional[str] = None, regenerate_summary: bool =
 def summarize(req: SummarizeRequest):
     model = req.llm_model or settings.get_setting("llm_model")
     url = settings.get_setting("ollama_url")
-    summary = ollama.summarize_text(req.text, model=model, url=url)
+    system_prompt = settings.get_setting("system_prompt")
+    summary = ollama.summarize_text(req.text, system_prompt=system_prompt, model=model, url=url)
     return {"summary": summary}
 
 # -----------------------------
@@ -242,7 +254,8 @@ def save(req: SaveRequest):
     if req.summarize:
         llm_model = settings.get_setting("llm_model")
         url = settings.get_setting("ollama_url")
-        summary_text = ollama.summarize_text(req.main_text, model=llm_model, url=url)
+        target_text = req.original_text or req.main_text        
+        summary_text = ollama.summarize_text(target_text, model=llm_model, url=url)
 
     id_ = db.insert_talk_log(
         main_text=req.main_text,
@@ -264,13 +277,21 @@ def save(req: SaveRequest):
 def retrieve(req: RetrieveRequest):
     sbert_model = settings.get_setting("sbert_model")
     model = get_embedding_model(sbert_model)
+    if req.threshold:
+        threshold = float(req.threshold)
+    else:
+        threshold = float(settings.get_setting("cosine_threshold"))
+    if req.limit:
+        limit = req.limit
+    else:
+        limit = int(settings.get_setting("recall_limit"))
     semantic_results = []
     if req.query:
         emb = embed_texts([req.query], model)[0]
         semantic_results = chroma.search_vectors(
             query_embedding=emb,
-            threshold=req.threshold or 0.8,
-            limit=req.limit or 5
+            threshold=threshold,
+            limit=limit
         )
     recent_results = db.get_recent_talk_logs(limit=req.recent_limit or 5)
     return {

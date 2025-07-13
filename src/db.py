@@ -33,13 +33,14 @@ def initialize_db():
 
 # 設定初期値
 DEFAULT_SETTINGS = {
-    "sbert_model": "cl-nagoya/ruri-small-v2",
-    "cosine_threshold": "0.8",
-    "recall_limit": "5",
-    "llm_model": "hf.co/SakanaAI/TinySwallow-1.5B-Instruct-GGUF:Q8_0",
+    "sbert_model": os.getenv("SBERT_MODEL", "cl-nagoya/ruri-small-v2"),
+    "cosine_threshold": os.getenv("COSINE_THRESHOLD", "0.5"),
+    "recall_limit": os.getenv("RECALL_LIMIT", "10"),
+    "llm_model": os.getenv("LLM_MODEL", "hf.co/SakanaAI/TinySwallow-1.5B-Instruct-GGUF:Q8_0"),
     "auto_summarize": "true",
     "store_summary_in_vector": "true",
-    "ollama_url": "http://localhost:11434"
+    "ollama_url": os.getenv("OLLAMA_URL", "http://localhost:11434"),
+    "system_prompt": os.getenv("SYSTEM_PROMPT", "以下のテキストを日本語で簡潔に要約してください。")
 }
 
 # settings初期化
@@ -62,10 +63,18 @@ def insert_talk_log(main_text, sub_text=None, summary_text=None):
         conn.commit()
         return c.lastrowid
 
+from datetime import datetime, timezone
+
 def update_talk_log(id_, main_text=None, sub_text=None, summary_text=None):
-    now = datetime.now(UTC).isoformat()
+    """
+    トークログを更新する。
+    更新対象が1つもない場合は例外を投げる。
+    """
+    now = datetime.now(timezone.utc).isoformat()
+
     fields = []
     values = []
+
     if main_text is not None:
         fields.append("main_text = ?")
         values.append(main_text)
@@ -75,10 +84,20 @@ def update_talk_log(id_, main_text=None, sub_text=None, summary_text=None):
     if summary_text is not None:
         fields.append("summary_text = ?")
         values.append(summary_text)
+
+    # 更新対象が1つもない場合
+    if not fields:
+        raise ValueError("At least one field must be provided for update.")
+
+    # update_timeは必ず更新
     fields.append("update_time = ?")
     values.append(now)
+
+    # WHERE句用のID
     values.append(id_)
+
     sql = f"UPDATE talk_logs SET {', '.join(fields)} WHERE id = ?"
+
     with get_conn() as conn:
         c = conn.cursor()
         c.execute(sql, values)
@@ -101,10 +120,27 @@ def get_talk_log_by_id(id_):
             return dict(zip([d[0] for d in c.description], row))
         return None
 
-def get_recent_talk_logs(limit=None):
+def get_recent_talk_logs(limit=None, order="create"):
+    """
+    最近のトークログを取得する。
+    
+    Args:
+        limit (int, optional): 最大取得件数。
+        order (str): 並べ替えのキー。'create' または 'update'。
+
+    Returns:
+        List[dict]: トークログのリスト。
+    """
+    if order not in ("create", "update"):
+        raise ValueError("order must be 'create' or 'update'")    
+    if order == "update":
+        order_field = "update_time"
+    else:
+        order_field = "create_time"
+
     with get_conn() as conn:
         c = conn.cursor()
-        sql = "SELECT * FROM talk_logs ORDER BY create_time DESC"
+        sql = f"SELECT * FROM talk_logs ORDER BY {order_field} DESC"
         if limit:
             sql += f" LIMIT {limit}"
         c.execute(sql)

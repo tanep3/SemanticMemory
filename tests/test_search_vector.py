@@ -28,6 +28,7 @@ def test_search_vector_limit_omitted():
         "query": "意味検索",
         "threshold": 0.0
     })
+    print(res.json())
     assert res.status_code == 200
 
 def test_search_vector_limit_zero():
