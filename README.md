@@ -35,6 +35,19 @@ http://localhost:6001/docs
 
 FastAPIのSwagger UIでAPIドキュメントを確認できます。
 
+### 3. クライアント実装例 (Python)
+
+実際のAIチャットボットに組み込む際のサンプルコードを用意しています。
+`retrieve` (取得) → `generate` (生成) → `save` (保存) のフローを確認できます。
+
+```bash
+# 必要なライブラリをインストール
+pip install requests ollama
+
+# サンプル実行
+python3 examples/ai_sample.py "AIの記憶について教えて"
+```
+
 ### 3. 環境変数
 
 Docker Composeで設定:
