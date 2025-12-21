@@ -48,7 +48,7 @@ def initialize_settings():
     with get_conn() as conn:
         c = conn.cursor()
         for k, v in DEFAULT_SETTINGS.items():
-            c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
+            c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, v))
         conn.commit()
 
 # talk_logs操作

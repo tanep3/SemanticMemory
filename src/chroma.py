@@ -66,7 +66,7 @@ def search_vectors(query_embedding, threshold=0.5, limit=10):
     # フィルタリング
     items = []
     for i, distance in enumerate(results['distances'][0]):
-        similarity = 1 - distance
+        similarity = 1 - (distance / 2)
         if similarity < threshold:
             continue
         items.append({
