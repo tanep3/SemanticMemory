@@ -11,6 +11,11 @@ COPY requirements.txt ./
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install -r requirements.txt
 
+# curl (ヘルスチェック用) のインストール
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+
 # データディレクトリを作成
 RUN mkdir -p ./datas/chroma ./datas/huggingface
 

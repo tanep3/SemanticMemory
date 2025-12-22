@@ -12,4 +12,18 @@ services:
       - CHROMA_PATH=/app/datas/chroma
       - OLLAMA_URL=http://localhost:11434
 
+    # ログローテーション設定（ディスク圧迫防止）
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # ヘルスチェック（自動復旧）
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:6001/docs || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
     restart: unless-stopped
