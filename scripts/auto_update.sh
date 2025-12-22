@@ -27,6 +27,10 @@ if [ "$LOCAL" != "$REMOTE" ]; then
     docker compose down
     docker compose up -d --build
     
+    # 3. 古いイメージ（<none>）のお掃除
+    echo "🧹 Cleaning up old images..."
+    docker image prune -f
+    
     echo "✅ Update complete! System is running with the latest version."
 else
     echo "✨ System is already up to date."
