@@ -55,6 +55,15 @@ environment:
 * `.env` ファイルを編集するか
 * `docker-compose.yml` 内の `environment` を書き換えて再起動
 
+## 5. 🔄 Update
+
+プロジェクトを最新版に更新するには、付属の自動更新スクリプトを実行してください。
+Git pull、Dockerビルド、古いイメージの削除を自動で行います。
+
+```bash
+./scripts/auto_update.sh
+```
+
 ---
 
 ## 📚 使用モデル・ライセンス
