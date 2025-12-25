@@ -8,8 +8,9 @@ WORKDIR /app
 COPY requirements.txt ./
 
 # 必要パッケージインストール (BuildKit cacheを使用)
+# タイムアウトとリトライ設定でネットワーク問題に対応
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements.txt
+    pip install --timeout 120 --retries 3 -r requirements.txt
 
 # curl (ヘルスチェック用) のインストール
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
