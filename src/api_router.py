@@ -67,11 +67,22 @@ class SettingsUpdateRequest(BaseModel):
     key: str
     value: str
 
+# v2.0.0 モデル
+class UpdateMemoryRequest(BaseModel):
+    id: int
+    main_text: Optional[str] = None
+    sub_text: Optional[str] = None
+    summary_text: Optional[str] = None
+
+class CleanupAuditLogsRequest(BaseModel):
+    max_age_days: Optional[int] = None  # None = 全削除
+
 # -----------------------------
 # /api/add_db
 # -----------------------------
 @router.post("/add_db")
 def add_db(req: AddDBRequest):
+    """SQLiteにテキストデータを新規登録する。"""
     if not req.main_text:
         raise HTTPException(status_code=400, detail="main_text is required")
     id_ = db.insert_talk_log(
@@ -86,6 +97,7 @@ def add_db(req: AddDBRequest):
 # -----------------------------
 @router.post("/add_vector")
 def add_vector(req: AddVectorRequest):
+    """ベクトルDB（Chroma）にテキストを埋め込み登録する。"""
     model_name = settings.get_setting("sbert_model")
     model = get_embedding_model(model_name)
     emb = embed_texts([req.text], model)[0]
@@ -97,6 +109,7 @@ def add_vector(req: AddVectorRequest):
 # -----------------------------
 @router.get("/search_db", response_model=List[SearchDBResponse])
 def search_db(q: str, order: str = "desc", limit: Optional[int] = None):
+    """SQLiteの全文検索（LIKE検索）。"""
     if not q:
         raise HTTPException(status_code=400, detail="q is required")
     if order not in ["asc", "desc"]:
@@ -110,6 +123,7 @@ def search_db(q: str, order: str = "desc", limit: Optional[int] = None):
 # -----------------------------
 @router.post("/search_vector")
 def search_vector(req: SearchVectorRequest):
+    """ベクトルDB（Chroma）で意味検索を実行する。"""
     if not req.query:
         raise HTTPException(status_code=400, detail="query is required")
     if req.limit == 0:
@@ -137,18 +151,21 @@ def search_vector(req: SearchVectorRequest):
 @router.get("/get_recent_db", response_model=List[SearchDBResponse])
 def get_recent_db(
     order: str = Query("create", enum=["create", "update"]),
-    limit: Optional[int] = None
+    limit: Optional[int] = None,
+    offset: int = 0
 ):
+    """最近のデータを時系列で取得する（ページネーション対応）。"""
     if limit == 0:
         raise HTTPException(status_code=400, detail="limit must be >0 or omitted")
     
-    return db.get_recent_talk_logs(order=order, limit=limit)
+    return db.get_recent_talk_logs(order=order, limit=limit, offset=offset)
 
 # -----------------------------
 # /api/get_by_id_db
 # -----------------------------
 @router.get("/get_by_id_db")
 def get_by_id_db(id: int):
+    """指定IDのデータを1件取得する。"""
     record = db.get_talk_log_by_id(id)
     if not record:
         raise HTTPException(status_code=404, detail="Not found")
@@ -159,6 +176,7 @@ def get_by_id_db(id: int):
 # -----------------------------
 @router.delete("/delete_data_db")
 def delete_data_db(id: int):
+    """SQLiteから指定IDのデータを削除する。"""
     count = db.delete_talk_log(id)
     if count == 0:
         raise HTTPException(status_code=404, detail="Not found")
@@ -169,6 +187,7 @@ def delete_data_db(id: int):
 # -----------------------------
 @router.delete("/delete_data_vector")
 def delete_data_vector(id: str):
+    """ベクトルDB（Chroma）から指定IDのデータを削除する。"""
     try:
         chroma.delete_vector(id)
     except Exception:
@@ -180,6 +199,7 @@ def delete_data_vector(id: str):
 # -----------------------------
 @router.patch("/update_db")
 def update_db(req: UpdateDBRequest):
+    """SQLiteのデータを更新する。"""
     if not (req.main_text or req.sub_text or req.summary_text):
         raise HTTPException(status_code=400, detail="No fields to update")
     count = db.update_talk_log(
@@ -197,6 +217,7 @@ def update_db(req: UpdateDBRequest):
 # -----------------------------
 @router.post("/update_vector")
 def update_vector(req: UpdateVectorRequest):
+    """ベクトルDB（Chroma）のデータを削除して再埋め込みする。"""
     exists = chroma.vector_exists(req.id)
     # 存在確認
     if not chroma.vector_exists(req.id):
@@ -224,6 +245,7 @@ def update_vector(req: UpdateVectorRequest):
 # -----------------------------
 @router.post("/rebuild_vector")
 def rebuild_vector(sbert_model: Optional[str] = None, regenerate_summary: bool = False):
+    """SQLiteの全データからベクトルDBを再構築する（モデル変更時等）。"""
     if sbert_model is None:
         sbert_model = settings.get_setting("sbert_model")
     model = get_embedding_model(sbert_model)
@@ -239,6 +261,7 @@ def rebuild_vector(sbert_model: Optional[str] = None, regenerate_summary: bool =
 # -----------------------------
 @router.post("/summarize")
 def summarize(req: SummarizeRequest):
+    """Ollamaを使ってテキストを要約する。"""
     model = req.llm_model or settings.get_setting("llm_model")
     url = settings.get_setting("ollama_url")
     system_prompt = settings.get_setting("system_prompt")
@@ -250,6 +273,7 @@ def summarize(req: SummarizeRequest):
 # -----------------------------
 @router.post("/save")
 def save(req: SaveRequest):
+    """SQLiteとベクトルDBに同時保存する（要約自動生成可）。"""
     summary_text = None
     if req.summarize:
         llm_model = settings.get_setting("llm_model")
@@ -275,6 +299,7 @@ def save(req: SaveRequest):
 # -----------------------------
 @router.post("/retrieve")
 def retrieve(req: RetrieveRequest):
+    """意味検索（Vector）と直近履歴（SQLite）を併合して取得する。"""
     sbert_model = settings.get_setting("sbert_model")
     model = get_embedding_model(sbert_model)
     if req.threshold:
@@ -304,12 +329,228 @@ def retrieve(req: RetrieveRequest):
 # -----------------------------
 @router.get("/settings")
 def get_all_settings():
+    """現在の設定値を全て取得する。"""
     return settings.get_all_settings()
 
 @router.post("/settings")
 def update_setting(req: SettingsUpdateRequest):
+    """設定値を更新する。"""
     try:
         settings.update_setting(req.key, req.value)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid key")
     return {"key": req.key, "value": req.value, "status": "updated"}
+
+# -----------------------------
+# v2.0.0 統合エンドポイント
+# -----------------------------
+
+@router.patch("/update_memory")
+def update_memory(req: UpdateMemoryRequest):
+    """
+    SQLite + Chroma 統合更新。
+    main_text変更時はVector再埋め込み + サマリー自動再生成。
+    """
+    # 既存レコード取得
+    record = db.get_talk_log_by_id(req.id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Memory not found")
+
+    # 更新データ準備
+    update_main = req.main_text if req.main_text is not None else None
+    update_sub = req.sub_text if req.sub_text is not None else None
+    update_summary = req.summary_text if req.summary_text is not None else None
+
+    # main_textが変更された場合、Vector再埋め込み + サマリー再生成
+    new_summary = None
+    if update_main is not None and update_main != record["main_text"]:
+        # Vector再埋め込み
+        sbert_model = settings.get_setting("sbert_model")
+        model = get_embedding_model(sbert_model)
+        emb = embed_texts([update_main], model)[0]
+        
+        # 古いVector削除して再追加
+        try:
+            chroma.delete_vector(str(req.id))
+        except Exception:
+            pass
+        chroma.add_vector(str(req.id), update_main, emb)
+
+        # サマリー再生成
+        llm_model = settings.get_setting("llm_model")
+        url = settings.get_setting("ollama_url")
+        new_summary = ollama.summarize_text(update_main, model=llm_model, url=url)
+        update_summary = new_summary
+
+    # DB更新
+    if update_main or update_sub or update_summary:
+        db.update_talk_log(
+            req.id,
+            main_text=update_main,
+            sub_text=update_sub,
+            summary_text=update_summary
+        )
+
+    return {
+        "id": req.id,
+        "status": "updated",
+        "summary_regenerated": new_summary is not None,
+        "new_summary": new_summary
+    }
+
+
+@router.delete("/delete_memory")
+def delete_memory(id: int):
+    """
+    SQLite + Chroma 同期削除 + audit_logs記録。
+    """
+    # 既存レコード取得（削除前にログ用に保存）
+    record = db.get_talk_log_by_id(id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Memory not found")
+
+    # SQLite削除
+    db.delete_talk_log(id)
+
+    # Chroma削除
+    try:
+        chroma.delete_vector(str(id))
+    except Exception:
+        pass  # Vectorがなくてもエラーにしない
+
+    # 監査ログ記録
+    db.insert_audit_log(
+        action="DELETE",
+        target_id=id,
+        deleted_data=record,
+        user_agent="API"
+    )
+
+    return {"id": id, "status": "deleted"}
+
+
+@router.post("/cleanup_audit_logs")
+def cleanup_audit_logs(req: CleanupAuditLogsRequest = None):
+    """
+    監査ログをクリーンアップする。
+    max_age_days指定時はその日数以上経過したレコードを削除。
+    省略時は全削除。
+    """
+    max_age = req.max_age_days if req else None
+    count = db.cleanup_audit_logs(max_age_days=max_age)
+    return {
+        "status": "cleaned",
+        "deleted_count": count,
+        "max_age_days": max_age
+    }
+
+
+# -----------------------------
+# v2.0.0 MCPエンドポイント
+# -----------------------------
+
+class MCPRecallRequest(BaseModel):
+    query: str
+    limit: int = 3
+    threshold: float = 0.7
+
+class MCPDeleteRequest(BaseModel):
+    id: int
+    confirm: bool = False
+
+
+@router.post("/mcp/recall_memory")
+def mcp_recall_memory(req: MCPRecallRequest):
+    """
+    【MCPツール】記憶を明示的に思い出す。
+    Vector検索でマッチしたIDについて、SQLiteから生データを取得して返す。
+    """
+    # 1. Vector検索
+    sbert_model = settings.get_setting("sbert_model")
+    model = get_embedding_model(sbert_model)
+    emb = embed_texts([req.query], model)[0]
+    
+    vector_results = chroma.search_vectors(
+        query_embedding=emb,
+        threshold=req.threshold,
+        limit=req.limit
+    )
+    
+    if not vector_results:
+        return {
+            "status": "no_results",
+            "message": "関連する記憶が見つかりませんでした",
+            "memories": []
+        }
+    
+    # 2. 各IDについてSQLiteから生データを取得
+    memories = []
+    for item in vector_results:
+        try:
+            record = db.get_talk_log_by_id(int(item["id"]))
+            if record:
+                record["similarity_score"] = item.get("score", 0)
+                memories.append(record)
+        except Exception:
+            pass
+    
+    return {
+        "status": "success",
+        "count": len(memories),
+        "memories": memories
+    }
+
+
+@router.post("/mcp/delete_memory")
+def mcp_delete_memory(req: MCPDeleteRequest):
+    """
+    【MCPツール】記憶を削除する（HITL対応）。
+    confirm=False: 削除対象の確認（プレビュー）
+    confirm=True: 実際に削除を実行
+    """
+    # 対象の記憶を取得
+    record = db.get_talk_log_by_id(req.id)
+    if not record:
+        return {
+            "status": "error",
+            "message": f"ID {req.id} の記憶は存在しません"
+        }
+    
+    if not req.confirm:
+        # 確認フェーズ: 削除対象の情報を返す
+        main_text = record.get("main_text", "")
+        return {
+            "status": "confirmation_required",
+            "message": "削除を実行するには confirm=true を指定してください",
+            "memory": {
+                "id": record.get("id"),
+                "summary_text": record.get("summary_text"),
+                "main_text": main_text[:200] + "..." if len(main_text) > 200 else main_text,
+                "create_time": record.get("create_time")
+            }
+        }
+    else:
+        # 削除フェーズ: 実際に削除
+        # SQLite削除
+        db.delete_talk_log(req.id)
+        
+        # Chroma削除
+        try:
+            chroma.delete_vector(str(req.id))
+        except Exception:
+            pass
+        
+        # 監査ログ記録
+        db.insert_audit_log(
+            action="DELETE",
+            target_id=req.id,
+            deleted_data=record,
+            user_agent="MCP"
+        )
+        
+        return {
+            "status": "deleted",
+            "message": f"ID {req.id} の記憶を削除しました",
+            "deleted_id": req.id
+        }
+

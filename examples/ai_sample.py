@@ -4,9 +4,12 @@ import sys
 import json
 import requests
 import ollama
+import os
 
 # SemanticMemory APIのURL
 SEMANTIC_API = "http://localhost:6001/api"
+OLLAMA_MODEL = 'gemini-3-flash-preview:cloud' # 環境に合わせて変更してください
+API_TIMEOUT = int(os.getenv("API_TIMEOUT", 30))  # APIタイムアウト（秒）
 
 if len(sys.argv) < 2:
     print("使用方法: ./ai_sample.py '質問内容'")
@@ -64,11 +67,18 @@ except Exception as e:
 # ----------------------------------------------------
 # 2. システムプロンプトの構築
 # ----------------------------------------------------
-system_prompt = f"""
-あなたは親切なAIアシスタントです。以下の記憶を参考に回答してください。
+memory_section = ""
+if vector_context != "(なし)":
+    memory_section = (
+        "\n\n=== RELEVANT MEMORY FOR CONTEXT ===\n"
+        "The following are past interactions related to the current topic. "
+        "Use them to provide consistent and personalized responses.\n"
+        f"{vector_context}\n"
+        "====================================\n\n"
+    )
 
-### 過去の関連記憶 (Context)
-{vector_context}
+system_prompt = f"""{memory_section}
+あなたは親切なAIアシスタントです。
 
 ### 直近の会話 (History)
 {recent_context}
@@ -86,7 +96,7 @@ print("Agent: ", end="", flush=True)
 full_response = ""
 try:
     stream = ollama.chat(
-        model='gemini-3-flash-preview:cloud', # 環境に合わせて変更してください
+        model=OLLAMA_MODEL,
         messages=[
             {'role': 'system', 'content': system_prompt},
             {'role': 'user', 'content': question}
@@ -108,6 +118,12 @@ print("\n")
 # ----------------------------------------------------
 # 4. 記憶の保存 (Save)
 # ----------------------------------------------------
+
+# 保存条件チェック（ノイズフィルタ）
+if len(full_response) < 10 or len(question) < 5:
+    print("(Skipped saving: message too short)")
+    sys.exit(0)
+
 # 会話を [user] ... [agent] ... というペアの形で保存するのがポイント
 # main_textに会話全文、sub_textにAgentの回答、などを入れる運用もアリですが
 # ここでは main_text にQ&Aセットを入れて、強力な文脈記憶にします。
@@ -122,7 +138,7 @@ save_payload = {
 }
 
 try:
-    res = requests.post(f"{SEMANTIC_API}/save", json=save_payload)
+    res = requests.post(f"{SEMANTIC_API}/save", json=save_payload, timeout=API_TIMEOUT)
     if res.status_code == 200:
         print("-> Saved successfully!")
     else:

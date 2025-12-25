@@ -35,6 +35,16 @@
 
 ---
 
+✅ **v2.0.0 統合API**
+
+| 名称                   | 機能                               |
+| -------------------- | -------------------------------- |
+| `update_memory`      | SQLite + Chroma同時更新（サマリー自動再生成）   |
+| `delete_memory`      | SQLite + Chroma同時削除（監査ログ記録）      |
+| `cleanup_audit_logs` | 監査ログクリーンアップ                      |
+
+---
+
 ---
 
 ## 🟢 2. 単機能API
@@ -106,6 +116,8 @@
 **パラメータ**
 
 * `limit` (int): 件数
+* `offset` (int): スキップ件数 **[v2.0.0 NEW]**
+* `order` (`create`/`update`): ソート順
 
 **レスポンス**
 
@@ -449,10 +461,190 @@ SQLiteとベクトルDBに同時保存。
 
 ---
 
-## 📝 5. 注意事項
+## 🟢 5. v2.0.0 統合API [NEW]
+
+---
+
+### 📙 5.1 統合更新
+
+#### `PATCH /update_memory`
+
+**概要**
+SQLite + ベクトルDBを同時更新。`main_text`変更時はVector再埋め込み＋サマリー自動再生成。
+
+**Body**
+
+```json
+{
+  "id": 123,
+  "main_text": "修正テキスト(任意)",
+  "sub_text": "修正テキスト(任意)",
+  "summary_text": "修正要約(任意)"
+}
+```
+
+**レスポンス**
+
+```json
+{
+  "id": 123,
+  "status": "updated",
+  "summary_regenerated": true,
+  "new_summary": "自動生成された要約"
+}
+```
+
+---
+
+---
+
+### 📙 5.2 統合削除
+
+#### `DELETE /delete_memory`
+
+**概要**
+SQLite + ベクトルDBを同時削除。削除データは`audit_logs`に記録。
+
+**パラメータ**
+
+* `id` (int): 削除対象ID
+
+**レスポンス**
+
+```json
+{
+  "id": 123,
+  "status": "deleted"
+}
+```
+---
+
+---
+
+### 📙 5.3 監査ログクリーンアップ
+
+#### `POST /cleanup_audit_logs`
+
+**概要**
+監査ログを削除。`max_age_days`省略時は全削除。
+
+**Body**
+
+```json
+{
+  "max_age_days": 365
+}
+```
+
+**レスポンス**
+
+```json
+{
+  "status": "cleaned",
+  "deleted_count": 42,
+  "max_age_days": 365
+}
+```
+
+---
+
+---
+
+## 🟢 6. MCPエンドポイント [v2.0.0 NEW]
+
+mcpo不要でSemanticMemory公式機能としてMCPツールを提供。
+
+---
+
+### 📙 6.1 記憶を思い出す
+
+#### `POST /mcp/recall_memory`
+
+**概要**
+Vector検索でマッチした記憶の生データ（SQLite）を取得する。
+
+**Body**
+
+```json
+{
+  "query": "検索クエリ",
+  "limit": 3,
+  "threshold": 0.7
+}
+```
+
+**レスポンス**
+
+```json
+{
+  "status": "success",
+  "count": 2,
+  "memories": [
+    {
+      "id": 64,
+      "main_text": "...",
+      "sub_text": "...",
+      "summary_text": "...",
+      "similarity_score": 0.85
+    }
+  ]
+}
+```
+
+---
+
+---
+
+### 📙 6.2 記憶を削除（HITL対応）
+
+#### `POST /mcp/delete_memory`
+
+**概要**
+指定IDの記憶を削除。`confirm=false`で確認、`confirm=true`で実行。
+
+**Body**
+
+```json
+{
+  "id": 64,
+  "confirm": false
+}
+```
+
+**確認時レスポンス**
+
+```json
+{
+  "status": "confirmation_required",
+  "memory": {
+    "id": 64,
+    "summary_text": "...",
+    "main_text": "..."
+  }
+}
+```
+
+**実行時レスポンス**
+
+```json
+{
+  "status": "deleted",
+  "deleted_id": 64
+}
+```
+
+---
+
+---
+
+## 📝 7. 注意事項
 
 * IDは**SQLite・ベクトルDB共通**
 * APIは将来拡張（タグ管理、複数モデル同時運用）
 * 認証は未実装（自己利用前提）
 * `rebuild_vector`は長時間処理
+* **[v2.0.0]** 起動時に1年以上経過した`audit_logs`を自動削除
+* **[v2.0.0]** MCPエンドポイントはmcpo不要で直接呼び出し可能
+
+
 

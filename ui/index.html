@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Dive - SemanticMemory Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1 class="logo">🧠 Neural Dive</h1>
+                <span class="version">v2.0.0</span>
+            </div>
+            <div class="header-right">
+                <button id="cleanup-btn" class="btn btn-danger" title="監査ログを全削除">
+                    🧹 マイグレーション
+                </button>
+            </div>
+        </header>
+
+        <!-- Search Bar -->
+        <section class="search-section">
+            <div class="search-container">
+                <input type="text" id="search-input" class="search-input" placeholder="記憶を検索...">
+                <div class="search-buttons">
+                    <button id="keyword-search-btn" class="btn btn-primary">🔍 キーワード</button>
+                    <button id="vector-search-btn" class="btn btn-secondary">🧠 意味検索</button>
+                    <button id="clear-search-btn" class="btn btn-ghost">✕ クリア</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Memory Cards -->
+        <main class="main-content">
+            <div id="memory-cards" class="memory-grid">
+                <!-- Cards will be dynamically inserted here -->
+            </div>
+            <div id="load-more-container" class="load-more-container">
+                <button id="load-more-btn" class="btn btn-outline">もっと読み込む</button>
+            </div>
+            <div id="loading" class="loading hidden">
+                <div class="spinner"></div>
+                <span>読み込み中...</span>
+            </div>
+            <div id="no-results" class="no-results hidden">
+                <span>記憶が見つかりませんでした</span>
+            </div>
+        </main>
+
+        <!-- Detail Modal -->
+        <div id="detail-modal" class="modal hidden">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>記憶の詳細</h2>
+                    <button id="close-modal-btn" class="btn btn-ghost">✕</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit-main-text">本文 (main_text)</label>
+                        <textarea id="edit-main-text" rows="6"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-sub-text">AI回答 (sub_text)</label>
+                        <textarea id="edit-sub-text" rows="4"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-summary">要約 (summary_text)</label>
+                        <textarea id="edit-summary" rows="2"></textarea>
+                        <button id="regenerate-summary-btn" class="btn btn-secondary btn-sm">🔄 要約を再生成</button>
+                    </div>
+                    <div class="form-group meta-info">
+                        <span id="edit-id"></span>
+                        <span id="edit-created"></span>
+                        <span id="edit-updated"></span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="delete-memory-btn" class="btn btn-danger">🗑️ 削除</button>
+                    <button id="save-memory-btn" class="btn btn-primary">💾 保存</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Confirm Dialog -->
+        <div id="confirm-dialog" class="modal hidden">
+            <div class="modal-overlay"></div>
+            <div class="modal-content modal-small">
+                <div class="modal-header">
+                    <h2 id="confirm-title">確認</h2>
+                </div>
+                <div class="modal-body">
+                    <p id="confirm-message">この操作を実行しますか？</p>
+                </div>
+                <div class="modal-footer">
+                    <button id="confirm-cancel-btn" class="btn btn-ghost">キャンセル</button>
+                    <button id="confirm-ok-btn" class="btn btn-danger">実行</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="toast hidden">
+            <span id="toast-message"></span>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

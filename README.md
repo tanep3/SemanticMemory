@@ -1,85 +1,140 @@
+[🇯🇵 日本語](./README_jp.md)
+
+---
+
 # SemanticMemory
 
-汎用的な会話履歴・メモの保存と、ベクトル検索APIを提供するFastAPIアプリケーションです。
+A FastAPI application that provides conversation log / memo storage with vector search capabilities.
 
 ## 🌟 Features
 
-- 会話ログの保存、更新、削除
-- SBERTによる埋め込み生成とベクトル検索
-- Ollamaによる要約
-- ChromaDBによるベクトルストレージ
-- RESTful API
-- Docker対応
+- **Conversation Log Management**: Save, update, and delete with SQLite + ChromaDB dual storage
+- **Vector Search**: Semantic search with SBERT embeddings
+- **Auto Summarization**: Summary generation via Ollama
+- **Neural Dive UI**: Web interface for managing memories from your browser
+- **MCP Integration**: AI tool integration via Model Context Protocol
+- **RESTful API**: Fast API server powered by FastAPI
+- **Docker Ready**: Easy deployment
+
+---
 
 ## 🚀 Getting Started
 
-### 1. Dockerで起動
+### 1. Start with Docker
 
 ```bash
 docker compose up -d
-````
+```
 
-デフォルトで以下の設定が使われます:
+Default settings:
 
-* `./datas` ディレクトリにChromaDBデータ
-* `./logs` ディレクトリにログ
-* ポート: `6001` (network_mode: host のため、ホストのポートを直接使用)
+* Data stored in `./datas` directory (SQLite / ChromaDB)
+* Port: `6001`
 
-### 2. APIエンドポイント
-
-アプリが起動したら以下にアクセスしてください:
+### 2. API Documentation
 
 ```
 http://localhost:6001/docs
 ```
 
-FastAPIのSwagger UIでAPIドキュメントを確認できます。
+View the API documentation via FastAPI's Swagger UI.
 
-### 3. クライアント実装例 (Examples)
+---
 
-PythonクライアントやOpenWebUIとの連携フィルターなど、具体的な使用例は [examples/usage.md](examples/usage.md) を参照してください。
+## 🧠 Neural Dive UI (Admin Panel)
 
-### 4. 環境変数
+A web-based admin panel for browsing, editing, and deleting memories.
 
-Docker Composeで設定:
+### Access
 
-```yaml
-environment:
-  - SQLITE_PATH=/app/semantic_memory.db
-  - CHROMA_PATH=/app/datas/chroma
-  - OLLAMA_URL=http://localhost:11434
+```
+http://localhost:6001/
 ```
 
-**環境変数を変更する場合:**
+### Features
 
-* `.env` ファイルを編集するか
-* `docker-compose.yml` 内の `environment` を書き換えて再起動
+| Feature | Description |
+|---|---|
+| 📋 **Memory List** | Browse saved conversation logs by time or keyword search |
+| ✏️ **Edit** | Edit main_text, sub_text, summary individually (auto-regenerates summary when main_text changes) |
+| 🗑️ **Delete** | Delete unwanted memories |
+| 🔍 **Orphan Detection** | Detect and fix inconsistencies between SQLite and ChromaDB |
 
-## 5. 🔄 Update
+### Authentication (Optional)
 
-プロジェクトを最新版に更新するには、付属の自動更新スクリプトを実行してください。
-Git pull、Dockerビルド、古いイメージの削除を自動で行います。
+Configure Basic Auth in `.env`:
+
+```env
+UI_USER=admin
+UI_PASS=secret
+```
+
+---
+
+## 🔗 MCP Integration (AI Tool Linking)
+
+Use MCP (Model Context Protocol) to operate memories from AI assistants.
+
+### Available Tools
+
+| Tool | Description |
+|---|---|
+| `recall_memory` | Explicitly search and retrieve past memories |
+| `delete_memory` | Delete memories (with confirmation) |
+
+### Configuration
+
+See the following for details:
+- [examples/usage.md](examples/usage.md) - Client examples & MCP setup
+- [docs/MCP要件定義書.md](docs/MCP要件定義書.md) - MCP specification (Japanese)
+
+---
+
+## 📁 Client Examples
+
+| File | Description |
+|---|---|
+| `examples/ai_sample.py` | Basic RAG client |
+| `examples/ai_mcp_sample.py` | MCP-integrated client (with HITL) |
+| `examples/open_webui_filter.py` | Filter for OpenWebUI |
+
+See [examples/usage.md](examples/usage.md) for details.
+
+---
+
+## ⚙️ Environment Variables
+
+Configure via `.env` or `docker-compose.yml`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `SQLITE_PATH` | `./datas/semantic_memory.db` | SQLite file path |
+| `CHROMA_PATH` | `./datas/chroma/` | ChromaDB directory |
+| `OLLAMA_URL` | `http://localhost:11434` | Ollama API URL |
+| `SBERT_MODEL` | `cl-nagoya/ruri-small-v2` | Embedding model |
+| `UI_USER` / `UI_PASS` | (empty) | UI authentication (enabled when both set) |
+| `API_TIMEOUT` | `30` | Client API timeout (seconds) |
+
+---
+
+## 🔄 Update
 
 ```bash
 ./scripts/auto_update.sh
 ```
 
+Automatically performs git pull, Docker build, and removes old images.
+
 ---
 
-## 📚 使用モデル・ライセンス
+## 📚 Models & Licenses
 
-このプロジェクトでは以下の外部モデルを利用しています:
+This project uses the following external models:
 
-* [cl-nagoya/ruri-small-v2](https://huggingface.co/cl-nagoya/ruri-small-v2)
+* [cl-nagoya/ruri-small-v2](https://huggingface.co/cl-nagoya/ruri-small-v2) - Apache 2.0, Gemma Terms
+* [SakanaAI/TinySwallow-1.5B-Instruct-GGUF](https://huggingface.co/SakanaAI/TinySwallow-1.5B-Instruct-GGUF) - Apache 2.0, Gemma Terms
 
-  * License: Apache 2.0, Gemma Terms & Prohibited Use
-* [SakanaAI/TinySwallow-1.5B-Instruct-GGUF](https://huggingface.co/SakanaAI/TinySwallow-1.5B-Instruct-GGUF)
-
-  * License: Apache 2.0, Gemma Terms & Prohibited Use
-  * **商用利用の場合**: Qwen (Apache 2.0) と Gemmaライセンスの両方に準拠する必要があります。
-
-モデルライセンスは本リポジトリのライセンスとは異なります。
-利用者自身でライセンス内容を確認し、遵守してください。
+Model licenses differ from this repository's license. Users are responsible for reviewing and complying with model license terms.
 
 ---
 

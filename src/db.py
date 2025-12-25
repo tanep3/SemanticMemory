@@ -1,6 +1,7 @@
 import sqlite3
 import os
-from datetime import datetime, timezone, UTC
+import json
+from datetime import datetime, timezone, timedelta
 
 DB_PATH = os.getenv("SQLITE_PATH", "./datas/semantic_memory.db")
 
@@ -27,6 +28,17 @@ def initialize_db():
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT
+        )
+        """)
+        # audit_logs (v2.0.0)
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            action TEXT NOT NULL,
+            target_id INTEGER,
+            deleted_data TEXT,
+            timestamp TEXT NOT NULL,
+            user_agent TEXT
         )
         """)
         conn.commit()
@@ -62,8 +74,6 @@ def insert_talk_log(main_text, sub_text=None, summary_text=None):
         """, (main_text, sub_text, summary_text, now, now))
         conn.commit()
         return c.lastrowid
-
-from datetime import datetime, timezone
 
 def update_talk_log(id_, main_text=None, sub_text=None, summary_text=None):
     """
@@ -120,12 +130,13 @@ def get_talk_log_by_id(id_):
             return dict(zip([d[0] for d in c.description], row))
         return None
 
-def get_recent_talk_logs(limit=None, order="create"):
+def get_recent_talk_logs(limit=None, offset=0, order="create"):
     """
     最近のトークログを取得する。
     
     Args:
         limit (int, optional): 最大取得件数。
+        offset (int): スキップする件数（ページネーション用）。
         order (str): 並べ替えのキー。'create' または 'update'。
 
     Returns:
@@ -142,7 +153,7 @@ def get_recent_talk_logs(limit=None, order="create"):
         c = conn.cursor()
         sql = f"SELECT * FROM talk_logs ORDER BY {order_field} DESC"
         if limit:
-            sql += f" LIMIT {limit}"
+            sql += f" LIMIT {limit} OFFSET {offset}"
         c.execute(sql)
         rows = c.fetchall()
         return [dict(zip([d[0] for d in c.description], row)) for row in rows]
@@ -182,3 +193,52 @@ def truncate_talk_logs():
         c = conn.cursor()
         c.execute("DELETE FROM talk_logs")
         conn.commit()
+
+
+# ===========================================
+# audit_logs 操作 (v2.0.0)
+# ===========================================
+def insert_audit_log(action: str, target_id: int, deleted_data: dict, user_agent: str = "API"):
+    """監査ログを挿入する"""
+    now = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        c = conn.cursor()
+        c.execute("""
+        INSERT INTO audit_logs (action, target_id, deleted_data, timestamp, user_agent)
+        VALUES (?, ?, ?, ?, ?)
+        """, (action, target_id, json.dumps(deleted_data, ensure_ascii=False), now, user_agent))
+        conn.commit()
+        return c.lastrowid
+
+
+def cleanup_audit_logs(max_age_days: int = None) -> int:
+    """
+    古い監査ログを削除する。
+    
+    Args:
+        max_age_days: 削除対象の経過日数。Noneの場合は全削除。
+    
+    Returns:
+        削除された行数
+    """
+    with get_conn() as conn:
+        c = conn.cursor()
+        if max_age_days is None:
+            # 全削除
+            c.execute("DELETE FROM audit_logs")
+        else:
+            # 指定日数以上経過したレコードを削除
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+            c.execute("DELETE FROM audit_logs WHERE timestamp < ?", (cutoff,))
+        conn.commit()
+        return c.rowcount
+
+
+def get_audit_logs(limit: int = 100) -> list:
+    """監査ログを取得する"""
+    with get_conn() as conn:
+        c = conn.cursor()
+        c.execute("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ?", (limit,))
+        rows = c.fetchall()
+        return [dict(zip([d[0] for d in c.description], row)) for row in rows]
+
