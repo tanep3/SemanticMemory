@@ -1,16 +1,24 @@
 services:
   semanticmemory:
     build: .
-    network_mode: host
     container_name: semanticmemory_app
+    ports:
+      - "6001:6001"
     volumes:
       - ./datas:/app/datas
       - ./logs:/app/logs
+      - ./hf_cache:/root/.cache/huggingface
+    env_file:
+      - .env
     environment:
       - APP_PORT=6001
       - SQLITE_PATH=/app/datas/semantic_memory.db
       - CHROMA_PATH=/app/datas/chroma
-      - OLLAMA_URL=http://localhost:11434
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - TRANSFORMERS_CACHE=/root/.cache/huggingface
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
     # ログローテーション設定（ディスク圧迫防止）
     logging:

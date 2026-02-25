@@ -4,7 +4,7 @@ def summarize_text(text, system_prompt="以下のテキストを日本語で簡�
     """
     Ollama APIで要約する
     """
-    prompt = f"system: {system_prompt}\n\n{text}"
+    prompt = f"system: {system_prompt}\n\nuser: {text}"
     payload = {
         "model": model,
         "prompt": prompt,
