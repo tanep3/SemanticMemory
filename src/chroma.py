@@ -91,3 +91,42 @@ def vector_exists(id_):
     result = collection.get(ids=[str(id_)])
     return result is not None and result["ids"] and len(result["ids"]) > 0
 
+
+# 整合性チェック：talk_logsの全IDがChromaに存在するか確認
+def check_integrity(db_ids):
+    """
+    SQLiteのIDリストに対し、Chroma側に対応するembedding_idが存在するかチェックする。
+    Returns: dict {"ok": bool, "db_only": list, "chroma_only": list, "matched": int}
+    """
+    if not db_ids:
+        return {"ok": True, "db_only": [], "chroma_only": [], "matched": 0, "total_db": 0, "total_chroma": 0}
+
+    db_id_set = set(str(i) for i in db_ids)
+
+    # Chromaの全embedding_idを取得
+    try:
+        all_in_chroma = collection.get(include=[])
+        all_chroma_ids = set(all_in_chroma["ids"]) if all_in_chroma["ids"] else set()
+    except Exception:
+        all_chroma_ids = set()
+
+    # DB IDでChromaを検索して存在確認
+    try:
+        chroma_for_db = collection.get(ids=list(db_id_set), include=[])
+        chroma_found = set(chroma_for_db["ids"]) if chroma_for_db["ids"] else set()
+    except Exception:
+        chroma_found = set()
+
+    matched = db_id_set & chroma_found
+    db_only = db_id_set - chroma_found
+    chroma_only = all_chroma_ids - db_id_set
+
+    return {
+        "ok": len(db_only) == 0 and len(chroma_only) == 0,
+        "db_only": sorted(db_only, key=lambda x: int(x) if x.isdigit() else x),
+        "chroma_only": sorted(chroma_only, key=lambda x: int(x) if x.isdigit() else x),
+        "matched": len(matched),
+        "total_db": len(db_id_set),
+        "total_chroma": len(all_chroma_ids),
+    }
+

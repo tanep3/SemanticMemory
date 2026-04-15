@@ -6,7 +6,7 @@ from . import db
 from . import chroma
 from . import ollama
 from . import settings
-from .chroma import get_embedding_model, embed_texts
+from .chroma import get_embedding_model, embed_texts, check_integrity
 
 router = APIRouter()
 
@@ -245,16 +245,61 @@ def update_vector(req: UpdateVectorRequest):
 # -----------------------------
 @router.post("/rebuild_vector")
 def rebuild_vector(sbert_model: Optional[str] = None, regenerate_summary: bool = False):
-    """SQLiteの全データからベクトルDBを再構築する（モデル変更時等）。"""
+    """SQLiteの全データからベクトルDBを再構築する（モデル変更時等）。
+    改善点: 事後の整合性チェックを行い、結果を返す。
+    """
     if sbert_model is None:
         sbert_model = settings.get_setting("sbert_model")
     model = get_embedding_model(sbert_model)
     records = db.get_recent_talk_logs()
+
+    # 事前チェック
+    pre_check = chroma.check_integrity([r["id"] for r in records]) if records else {"ok": True}
+
     chroma.clear_collection()
+    success = 0
+    fail = 0
     for r in records:
-        emb = embed_texts([r["main_text"]], model)[0]
-        chroma.add_vector(str(r["id"]), r["main_text"], emb)
-    return {"status": "rebuild completed", "count": len(records)}
+        try:
+            emb = embed_texts([r["main_text"]], model)[0]
+            chroma.add_vector(str(r["id"]), r["main_text"], emb)
+            success += 1
+        except Exception as e:
+            fail += 1
+
+    # 事後チェック
+    post_records = db.get_recent_talk_logs()
+    post_check = chroma.check_integrity([r["id"] for r in post_records]) if post_records else {"ok": True}
+
+    return {
+        "status": "rebuild completed",
+        "count": len(records),
+        "success": success,
+        "fail": fail,
+        "pre_integrity": pre_check,
+        "post_integrity": post_check,
+        "integrity_ok": post_check.get("ok", False),
+    }
+
+
+# -----------------------------
+# /api/check_integrity (v2.1.0)
+# -----------------------------
+@router.get("/check_integrity")
+def check_integrity():
+    """
+    SQLiteとChromaDBのID整合性をチェックする。
+    データ復旧や不具合診断に使用。
+    """
+    records = db.get_recent_talk_logs(limit=10000)
+    db_ids = [r["id"] for r in records]
+    result = chroma.check_integrity(db_ids)
+    result["details"] = {
+        "db_count": len(db_ids),
+        "db_id_range": f"{min(db_ids)}-{max(db_ids)}" if db_ids else "N/A",
+        "chroma_count": result.get("total_chroma", 0),
+    }
+    return result
 
 # -----------------------------
 # /api/summarize

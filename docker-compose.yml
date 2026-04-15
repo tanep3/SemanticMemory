@@ -5,6 +5,7 @@ services:
     ports:
       - "6001:6001"
     volumes:
+      - ./src:/app/src:ro
       - ./datas:/app/datas
       - ./logs:/app/logs
       - ./hf_cache:/root/.cache/huggingface
