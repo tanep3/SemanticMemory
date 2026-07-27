@@ -45,7 +45,7 @@ def initialize_db():
 
 # 設定初期値
 DEFAULT_SETTINGS = {
-    "sbert_model": os.getenv("SBERT_MODEL", "cl-nagoya/ruri-small-v2"),
+    "sbert_model": os.getenv("SBERT_MODEL", "cl-nagoya/ruri-v3-70m"),
     "cosine_threshold": os.getenv("COSINE_THRESHOLD", "0.5"),
     "recall_limit": os.getenv("RECALL_LIMIT", "10"),
     "llm_model": os.getenv("LLM_MODEL", "hf.co/SakanaAI/TinySwallow-1.5B-Instruct-GGUF:Q8_0"),

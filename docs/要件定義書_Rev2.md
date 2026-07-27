@@ -28,7 +28,7 @@ Version 2.0.0 では、既存のAPIサーバーに加え、ユーザーが記憶
   * SQLite (全文検索・メタ管理)
   * ChromaDB (意味検索ベクトル)
 * **Embeddingモデル**: SentenceTransformer (SBERT)
-  * デフォルト: `cl-nagoya/ruri-small-v2`
+  * 新規DBのデフォルト: `cl-nagoya/ruri-v3-70m`
 * **要約モデル**: Ollama
   * デフォルト: `hf.co/SakanaAI/TinySwallow-1.5B-Instruct-GGUF:Q8_0`
 * **Frontend (New)**
@@ -164,4 +164,3 @@ Version 2.0.0 では、既存のAPIサーバーに加え、ユーザーが記憶
 | v1.0.0 | Backend API Initial Release |
 | v1.1.0 | OpenWebUI Filter Integration |
 | v2.0.0 | "Neural Dive" UI Update (Dashboard, Search, Edit, Delete, Unified API) |
-

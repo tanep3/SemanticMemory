@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+from src import db
 from src.main import app
 
 client = TestClient(app)
@@ -23,6 +24,14 @@ def test_sbert_model_requires_safe_rebuild():
         "value": "cl-nagoya/ruri-v3-70m"
     })
     assert res.status_code == 409
+
+
+def test_initialize_settings_preserves_existing_sbert_model():
+    db.update_setting("sbert_model", "cl-nagoya/ruri-small-v2")
+
+    db.initialize_settings()
+
+    assert db.get_settings()["sbert_model"] == "cl-nagoya/ruri-small-v2"
 
 
 def test_update_invalid_key():

@@ -111,8 +111,8 @@ Configure via `.env` or `docker-compose.yml`:
 |---|---|---|
 | `SQLITE_PATH` | `./datas/semantic_memory.db` | SQLite file path |
 | `CHROMA_PATH` | `./datas/chroma/` | ChromaDB directory |
-| `OLLAMA_URL` | `http://localhost:11434` | Ollama API URL |
-| `SBERT_MODEL` | `cl-nagoya/ruri-small-v2` | Embedding model |
+| `OLLAMA_URL` | `http://host.docker.internal:11434` | Host Ollama URL used by Docker |
+| `SBERT_MODEL` | `cl-nagoya/ruri-v3-70m` | Embedding model for a new database |
 | `SBERT_DEVICE` | `cpu` | SentenceTransformer device |
 | `UI_USER` / `UI_PASS` | (empty) | UI authentication (enabled when both set) |
 | `API_TIMEOUT` | `30` | Client API timeout (seconds) |
@@ -120,6 +120,9 @@ Configure via `.env` or `docker-compose.yml`:
 ---
 
 ## Changing the Embedding Model
+
+New databases use Ruri v3 by default. Existing databases keep the model stored
+in their settings table and are not migrated automatically.
 
 Do not change only `SBERT_MODEL` after vectors have been stored. Embedding
 dimensions and vector spaces differ between models. Rebuild from SQLite:

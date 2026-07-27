@@ -111,8 +111,8 @@ MCP（Model Context Protocol）を使って、AIアシスタントから記憶�
 |---|---|---|
 | `SQLITE_PATH` | `./datas/semantic_memory.db` | SQLiteファイルパス |
 | `CHROMA_PATH` | `./datas/chroma/` | ChromaDBディレクトリ |
-| `OLLAMA_URL` | `http://localhost:11434` | Ollama API URL |
-| `SBERT_MODEL` | `cl-nagoya/ruri-small-v2` | 埋め込みモデル |
+| `OLLAMA_URL` | `http://host.docker.internal:11434` | Dockerから接続するホストOllama URL |
+| `SBERT_MODEL` | `cl-nagoya/ruri-v3-70m` | 新規DB用の埋め込みモデル |
 | `SBERT_DEVICE` | `cpu` | SentenceTransformerの実行デバイス |
 | `UI_USER` / `UI_PASS` | (空) | UI認証（両方設定で有効） |
 | `API_TIMEOUT` | `30` | クライアントAPIタイムアウト（秒） |
@@ -120,6 +120,9 @@ MCP（Model Context Protocol）を使って、AIアシスタントから記憶�
 ---
 
 ## 埋め込みモデルの変更
+
+新規DBはRuri v3を既定値として使用します。既存DBは設定テーブルに保存済みのモデルを
+維持し、自動移行しません。
 
 ベクトル保存後に`SBERT_MODEL`だけを変更しないでください。モデルごとに埋め込み次元と
 ベクトル空間が異なるため、SQLiteを正として再構築します。
