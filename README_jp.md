@@ -23,13 +23,14 @@
 ### 1. Dockerで起動
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
 デフォルトで以下の設定が使われます：
 
 * `./datas` ディレクトリに SQLite / ChromaDB データ
 * ポート: `6001`
+* CPU専用PyTorch（CUDA/NVIDIAパッケージはインストールしません）
 
 ### 2. APIドキュメント
 
@@ -112,8 +113,26 @@ MCP（Model Context Protocol）を使って、AIアシスタントから記憶�
 | `CHROMA_PATH` | `./datas/chroma/` | ChromaDBディレクトリ |
 | `OLLAMA_URL` | `http://localhost:11434` | Ollama API URL |
 | `SBERT_MODEL` | `cl-nagoya/ruri-small-v2` | 埋め込みモデル |
+| `SBERT_DEVICE` | `cpu` | SentenceTransformerの実行デバイス |
 | `UI_USER` / `UI_PASS` | (空) | UI認証（両方設定で有効） |
 | `API_TIMEOUT` | `30` | クライアントAPIタイムアウト（秒） |
+
+---
+
+## 埋め込みモデルの変更
+
+ベクトル保存後に`SBERT_MODEL`だけを変更しないでください。モデルごとに埋め込み次元と
+ベクトル空間が異なるため、SQLiteを正として再構築します。
+
+```bash
+curl -fsS -X POST \
+  "http://127.0.0.1:6001/api/rebuild_vector?sbert_model=cl-nagoya/ruri-v3-70m"
+curl -fsS http://127.0.0.1:6001/api/check_integrity
+```
+
+一時コレクションの全件生成と整合性確認に成功した場合だけ切り替えます。
+モデル取得、埋め込み生成、整合性確認のいずれかに失敗した場合、現在のコレクションと
+モデル設定は変更されません。
 
 ---
 
@@ -131,7 +150,8 @@ Git pull、Dockerビルド、古いイメージの削除を自動で行います
 
 このプロジェクトでは以下の外部モデルを利用しています：
 
-* [cl-nagoya/ruri-small-v2](https://huggingface.co/cl-nagoya/ruri-small-v2) - Apache 2.0, Gemma Terms
+* [cl-nagoya/ruri-small-v2](https://huggingface.co/cl-nagoya/ruri-small-v2) - Apache 2.0
+* [cl-nagoya/ruri-v3-70m](https://huggingface.co/cl-nagoya/ruri-v3-70m) - Apache 2.0
 * [SakanaAI/TinySwallow-1.5B-Instruct-GGUF](https://huggingface.co/SakanaAI/TinySwallow-1.5B-Instruct-GGUF) - Apache 2.0, Gemma Terms
 
 モデルライセンスは本リポジトリのライセンスとは異なります。利用者自身でライセンス内容を確認し、遵守してください。

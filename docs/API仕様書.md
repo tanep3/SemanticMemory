@@ -300,22 +300,34 @@
 **概要**
 全再埋め込み
 
-**Body**
+**Query parameters**
 
-```json
-{
-  "sbert_model": "新モデル名",
-  "regenerate_summary": true
-}
+- `sbert_model`: 切替先のSentenceTransformerモデル名。省略時は現在値。
+- `regenerate_summary`: 予約済み。現在は要約を再生成しない。
+
+例:
+
+```text
+POST /api/rebuild_vector?sbert_model=cl-nagoya/ruri-v3-70m
 ```
 
 **レスポンス**
 
 ```json
 {
-  "status": "rebuild_started"
+  "status": "rebuild completed",
+  "count": 124,
+  "embedding_model": "cl-nagoya/ruri-v3-70m",
+  "embedding_dimension": 384,
+  "prefix_scheme": "ruri_v3_retrieval",
+  "integrity": {
+    "ok": true
+  }
 }
 ```
+
+SQLiteの全レコードを一時コレクションへ埋め込み、ID整合性を確認してから切り替える。
+失敗時は従来コレクションと`sbert_model`設定を維持する。
 
 ---
 
@@ -645,6 +657,5 @@ Vector検索でマッチした記憶の生データ（SQLite）を取得する�
 * `rebuild_vector`は長時間処理
 * **[v2.0.0]** 起動時に1年以上経過した`audit_logs`を自動削除
 * **[v2.0.0]** MCPエンドポイントはmcpo不要で直接呼び出し可能
-
 
 

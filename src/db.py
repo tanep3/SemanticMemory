@@ -60,7 +60,7 @@ def initialize_settings():
     with get_conn() as conn:
         c = conn.cursor()
         for k, v in DEFAULT_SETTINGS.items():
-            c.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, v))
+            c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
         conn.commit()
 
 # talk_logs操作
@@ -241,4 +241,3 @@ def get_audit_logs(limit: int = 100) -> list:
         c.execute("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT ?", (limit,))
         rows = c.fetchall()
         return [dict(zip([d[0] for d in c.description], row)) for row in rows]
-

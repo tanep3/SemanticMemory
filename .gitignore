@@ -5,6 +5,9 @@ datas/*
 # ただしディレクトリ自体は残すためにこの例外をつける
 !datas/.gitkeep
 
+# Hugging Face model cache
+hf_cache/
+
 # Python
 __pycache__/
 *.py[cod]

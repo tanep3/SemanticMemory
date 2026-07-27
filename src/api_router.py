@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
+from functools import wraps
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
@@ -6,9 +7,19 @@ from . import db
 from . import chroma
 from . import ollama
 from . import settings
-from .chroma import get_embedding_model, embed_texts
+from .chroma import embed_documents, embed_query, get_embedding_model
 
 router = APIRouter()
+
+
+def serialized_embedding_state(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        with chroma.embedding_state():
+            return func(*args, **kwargs)
+
+    return wrapped
+
 
 # -----------------------------
 # モデル
@@ -81,6 +92,7 @@ class CleanupAuditLogsRequest(BaseModel):
 # /api/add_db
 # -----------------------------
 @router.post("/add_db")
+@serialized_embedding_state
 def add_db(req: AddDBRequest):
     """SQLiteにテキストデータを新規登録する。"""
     if not req.main_text:
@@ -96,11 +108,12 @@ def add_db(req: AddDBRequest):
 # /api/add_vector
 # -----------------------------
 @router.post("/add_vector")
+@serialized_embedding_state
 def add_vector(req: AddVectorRequest):
     """ベクトルDB（Chroma）にテキストを埋め込み登録する。"""
     model_name = settings.get_setting("sbert_model")
     model = get_embedding_model(model_name)
-    emb = embed_texts([req.text], model)[0]
+    emb = embed_documents([req.text], model)[0]
     chroma.add_vector(req.id, req.text, emb)
     return {"id": req.id, "status": "vector saved"}
 
@@ -122,6 +135,7 @@ def search_db(q: str, order: str = "desc", limit: Optional[int] = None):
 # /api/search_vector
 # -----------------------------
 @router.post("/search_vector")
+@serialized_embedding_state
 def search_vector(req: SearchVectorRequest):
     """ベクトルDB（Chroma）で意味検索を実行する。"""
     if not req.query:
@@ -131,7 +145,7 @@ def search_vector(req: SearchVectorRequest):
 
     sbert_model = settings.get_setting("sbert_model")
     model = get_embedding_model(sbert_model)
-    emb = embed_texts([req.query], model)[0]
+    emb = embed_query(req.query, model)
     if req.threshold:
         threshold = float(req.threshold)
     else:
@@ -175,6 +189,7 @@ def get_by_id_db(id: int):
 # /api/delete_data_db
 # -----------------------------
 @router.delete("/delete_data_db")
+@serialized_embedding_state
 def delete_data_db(id: int):
     """SQLiteから指定IDのデータを削除する。"""
     count = db.delete_talk_log(id)
@@ -186,18 +201,19 @@ def delete_data_db(id: int):
 # /api/delete_data_vector
 # -----------------------------
 @router.delete("/delete_data_vector")
+@serialized_embedding_state
 def delete_data_vector(id: str):
     """ベクトルDB（Chroma）から指定IDのデータを削除する。"""
-    try:
-        chroma.delete_vector(id)
-    except Exception:
+    if not chroma.vector_exists(id):
         raise HTTPException(status_code=404, detail="Not found")
+    chroma.delete_vector(id)
     return {"id": id, "status": "vector deleted"}
 
 # -----------------------------
 # /api/update_db
 # -----------------------------
 @router.patch("/update_db")
+@serialized_embedding_state
 def update_db(req: UpdateDBRequest):
     """SQLiteのデータを更新する。"""
     if not (req.main_text or req.sub_text or req.summary_text):
@@ -216,9 +232,9 @@ def update_db(req: UpdateDBRequest):
 # /api/update_vector
 # -----------------------------
 @router.post("/update_vector")
+@serialized_embedding_state
 def update_vector(req: UpdateVectorRequest):
     """ベクトルDB（Chroma）のデータを削除して再埋め込みする。"""
-    exists = chroma.vector_exists(req.id)
     # 存在確認
     if not chroma.vector_exists(req.id):
         raise HTTPException(status_code=404, detail="Vector not found")
@@ -229,7 +245,7 @@ def update_vector(req: UpdateVectorRequest):
     # 再追加
     model_name = settings.get_setting("sbert_model")
     model = get_embedding_model(model_name)
-    emb = embed_texts([req.text], model)[0]
+    emb = embed_documents([req.text], model)[0]
     chroma.add_vector(req.id, req.text, emb)
 
     summary = None
@@ -244,17 +260,44 @@ def update_vector(req: UpdateVectorRequest):
 # /api/rebuild_vector
 # -----------------------------
 @router.post("/rebuild_vector")
+@serialized_embedding_state
 def rebuild_vector(sbert_model: Optional[str] = None, regenerate_summary: bool = False):
-    """SQLiteの全データからベクトルDBを再構築する（モデル変更時等）。"""
+    """SQLiteを正として、安全にベクトルDBと埋め込みモデルを切り替える。"""
     if sbert_model is None:
         sbert_model = settings.get_setting("sbert_model")
-    model = get_embedding_model(sbert_model)
     records = db.get_recent_talk_logs()
-    chroma.clear_collection()
-    for r in records:
-        emb = embed_texts([r["main_text"]], model)[0]
-        chroma.add_vector(str(r["id"]), r["main_text"], emb)
-    return {"status": "rebuild completed", "count": len(records)}
+    result = chroma.rebuild_collection(
+        records,
+        sbert_model,
+        on_activate=lambda: settings.update_setting("sbert_model", sbert_model),
+    )
+    result.update({
+        "status": "rebuild completed",
+        "regenerate_summary": regenerate_summary,
+    })
+    return result
+
+
+# -----------------------------
+# /api/check_integrity (v2.1.0)
+# -----------------------------
+@router.get("/check_integrity")
+@serialized_embedding_state
+def check_integrity():
+    """
+    SQLiteとChromaDBのID整合性をチェックする。
+    データ復旧や不具合診断に使用。
+    """
+    records = db.get_recent_talk_logs(limit=10000)
+    db_ids = [r["id"] for r in records]
+    result = chroma.check_integrity(db_ids)
+    result["details"] = {
+        "db_count": len(db_ids),
+        "db_id_range": f"{min(db_ids)}-{max(db_ids)}" if db_ids else "N/A",
+        "chroma_count": result.get("total_chroma", 0),
+        "collection_metadata": chroma.collection.metadata or {},
+    }
+    return result
 
 # -----------------------------
 # /api/summarize
@@ -272,6 +315,7 @@ def summarize(req: SummarizeRequest):
 # /api/save
 # -----------------------------
 @router.post("/save")
+@serialized_embedding_state
 def save(req: SaveRequest):
     """SQLiteとベクトルDBに同時保存する（要約自動生成可）。"""
     summary_text = None
@@ -289,7 +333,7 @@ def save(req: SaveRequest):
 
     sbert_model = settings.get_setting("sbert_model")
     model = get_embedding_model(sbert_model)
-    emb = embed_texts([req.main_text], model)[0]
+    emb = embed_documents([req.main_text], model)[0]
     chroma.add_vector(str(id_), req.main_text, emb)
 
     return {"id": id_, "status": "saved"}
@@ -298,6 +342,7 @@ def save(req: SaveRequest):
 # /api/retrieve
 # -----------------------------
 @router.post("/retrieve")
+@serialized_embedding_state
 def retrieve(req: RetrieveRequest):
     """意味検索（Vector）と直近履歴（SQLite）を併合して取得する。"""
     sbert_model = settings.get_setting("sbert_model")
@@ -312,7 +357,7 @@ def retrieve(req: RetrieveRequest):
         limit = int(settings.get_setting("recall_limit"))
     semantic_results = []
     if req.query:
-        emb = embed_texts([req.query], model)[0]
+        emb = embed_query(req.query, model)
         semantic_results = chroma.search_vectors(
             query_embedding=emb,
             threshold=threshold,
@@ -335,6 +380,11 @@ def get_all_settings():
 @router.post("/settings")
 def update_setting(req: SettingsUpdateRequest):
     """設定値を更新する。"""
+    if req.key == "sbert_model":
+        raise HTTPException(
+            status_code=409,
+            detail="Change sbert_model through /api/rebuild_vector",
+        )
     try:
         settings.update_setting(req.key, req.value)
     except ValueError:
@@ -346,6 +396,7 @@ def update_setting(req: SettingsUpdateRequest):
 # -----------------------------
 
 @router.patch("/update_memory")
+@serialized_embedding_state
 def update_memory(req: UpdateMemoryRequest):
     """
     SQLite + Chroma 統合更新。
@@ -367,7 +418,7 @@ def update_memory(req: UpdateMemoryRequest):
         # Vector再埋め込み
         sbert_model = settings.get_setting("sbert_model")
         model = get_embedding_model(sbert_model)
-        emb = embed_texts([update_main], model)[0]
+        emb = embed_documents([update_main], model)[0]
         
         # 古いVector削除して再追加
         try:
@@ -400,6 +451,7 @@ def update_memory(req: UpdateMemoryRequest):
 
 
 @router.delete("/delete_memory")
+@serialized_embedding_state
 def delete_memory(id: int):
     """
     SQLite + Chroma 同期削除 + audit_logs記録。
@@ -460,6 +512,7 @@ class MCPDeleteRequest(BaseModel):
 
 
 @router.post("/mcp/recall_memory")
+@serialized_embedding_state
 def mcp_recall_memory(req: MCPRecallRequest):
     """
     【MCPツール】記憶を明示的に思い出す。
@@ -468,7 +521,7 @@ def mcp_recall_memory(req: MCPRecallRequest):
     # 1. Vector検索
     sbert_model = settings.get_setting("sbert_model")
     model = get_embedding_model(sbert_model)
-    emb = embed_texts([req.query], model)[0]
+    emb = embed_query(req.query, model)
     
     vector_results = chroma.search_vectors(
         query_embedding=emb,
@@ -502,6 +555,7 @@ def mcp_recall_memory(req: MCPRecallRequest):
 
 
 @router.post("/mcp/delete_memory")
+@serialized_embedding_state
 def mcp_delete_memory(req: MCPDeleteRequest):
     """
     【MCPツール】記憶を削除する（HITL対応）。
@@ -553,4 +607,3 @@ def mcp_delete_memory(req: MCPDeleteRequest):
             "message": f"ID {req.id} の記憶を削除しました",
             "deleted_id": req.id
         }
-

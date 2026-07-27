@@ -7,10 +7,13 @@ WORKDIR /app
 # Python依存ファイルをコピー
 COPY requirements.txt ./
 
-# 必要パッケージインストール (BuildKit cacheを使用)
-# タイムアウトとリトライ設定でネットワーク問題に対応
+# SemanticMemory is CPU-only. Installing torch from PyPI can pull the CUDA
+# runtime and several gigabytes of NVIDIA packages even when no GPU exists.
+ARG PYTORCH_CPU_INDEX_URL=https://download.pytorch.org/whl/cpu
 RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --timeout 120 --retries 3 -r requirements.txt
+    pip install --timeout 120 --retries 3 \
+        --index-url "${PYTORCH_CPU_INDEX_URL}" torch \
+    && pip install --timeout 120 --retries 3 -r requirements.txt
 
 # curl (ヘルスチェック用) のインストール
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
@@ -18,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 
 
 # データディレクトリを作成
-RUN mkdir -p ./datas/chroma ./datas/huggingface
+RUN mkdir -p ./datas/chroma /root/.cache/huggingface
 
 # アプリのコードをコピー
 COPY . .
@@ -27,7 +30,7 @@ COPY . .
 # HF_HOME: モデルキャッシュをボリュームマウントされたディレクトリに向ける
 ENV PYTHONUNBUFFERED=1 \
     CHROMA_PATH=/app/datas/chroma \
-    HF_HOME=/app/datas/huggingface
+    HF_HOME=/root/.cache/huggingface
 
 # サービス起動
 CMD ["sh", "-c", "uvicorn src.main:app --host 0.0.0.0 --port ${APP_PORT:-8000}"]
